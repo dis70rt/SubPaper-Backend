@@ -1,18 +1,49 @@
 package wallpaper
-// TODO: Reuse the channel and token.
+
 import (
+	"fmt"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	reddit "github.com/dis70rt/subpaper-backend/internal/Reddit"
+	"github.com/patrickmn/go-cache"
 )
 
-func isValid(post *reddit.RedditPost) bool {
-	return post.URL != "" && strings.Contains(post.URL, "i.redd.it") && !post.Is18
+type Service struct {
+    client 	*reddit.RedditClient
+	cache 	*cache.Cache
 }
 
-func (req *WallpaperRequest) FetchWallpaper() ([]WallpaperResponse, error) {
-	client := reddit.NewClient()
+func NewService(client *reddit.RedditClient, cache *cache.Cache) *Service {
+    return &Service{
+        client: client,
+		cache: cache,
+    }
+}
+
+func (req *WallpaperRequest) buildSearchPath(subreddit string) string {
+	req.setDefaults()
+	params := url.Values{}
+	params.Set("q", req.Query)
+	params.Set("sort", req.Sort)
+	params.Set("t", req.TimeFilter)
+	params.Set("limit", strconv.Itoa(req.Limit))
+	params.Set("restrict_sr", "1")
+
+	return fmt.Sprintf("/r/%s/search?%s", subreddit, params.Encode())
+}
+
+func (service *Service) FetchWallpaper(req *WallpaperRequest) ([]WallpaperResponse, error) {
+	
+	cacheKey := fmt.Sprintf("wallpaper:%s:%s:%s:%s:%d", 
+        req.Type, req.Query, req.Sort, req.TimeFilter, req.Limit)
+	
+	if cached, found := service.cache.Get(cacheKey); found {
+        return cached.([]WallpaperResponse), nil
+    }
 
 	subreddits := map[string][]string{
 		"anime":  {"Animewallpaper", "awwnime", "AnimeWallpapersSFW"},
@@ -39,39 +70,13 @@ func (req *WallpaperRequest) FetchWallpaper() ([]WallpaperResponse, error) {
 		subreddit := sub
 		go func() {
 			path := req.buildSearchPath(subreddit)
-			resp, err := client.GetReddit(path)
+			resp, err := service.client.GetReddit(path)
 			if err != nil {
 				resultsCh <- result{nil, err}
 				return
 			}
 
-			var wallpapers []WallpaperResponse
-			for _, child := range resp.Data.Children {
-				post := child.Data
-				if isValid(&post) {
-					width, height := 0, 0
-					preview := ""
-					if post.Preview.Enabled && len(post.Preview.Images) > 0 {
-						images := post.Preview.Images
-						last := images[len(images)-1]
-						width = last.Source.Width
-						height = last.Source.Height
-						preview = post.Preview.Images[0].Resolutions[2].URL
-					}
-
-					if width >= 1080 && height >= 1920 {
-						wallpapers = append(wallpapers, WallpaperResponse{
-							ID:      post.ID,
-							Post:    post.Post,
-							Preview: preview,
-							URL:     post.URL,
-							Score:   post.Score,
-							Height:  height,
-							Width:   width,
-						})
-					}
-				}
-			}
+			wallpapers := extractPosts(resp)
 			resultsCh <- result{wallpapers, nil}
 		}()
 	}
@@ -89,5 +94,41 @@ func (req *WallpaperRequest) FetchWallpaper() ([]WallpaperResponse, error) {
 		return allWallpapers[i].Score > allWallpapers[j].Score
 	})
 
+	service.cache.Set(cacheKey, allWallpapers, 12*time.Hour)
 	return allWallpapers, nil
+}
+
+func isValid(post *reddit.RedditPost) bool {
+	return post.URL != "" && strings.Contains(post.URL, "i.redd.it") && !post.Is18
+}
+
+func extractPosts(resp *reddit.RedditAPIResponse) []WallpaperResponse {
+    var wallpapers []WallpaperResponse
+	for _, child := range resp.Data.Children {
+		post := child.Data
+		if isValid(&post) {
+			width, height := 0, 0
+			preview := ""
+			if post.Preview.Enabled && len(post.Preview.Images) > 0 {
+				images := post.Preview.Images
+				last := images[len(images)-1]
+				width = last.Source.Width
+				height = last.Source.Height
+				preview = post.Preview.Images[0].Resolutions[2].URL
+			}
+
+			if width >= 1080 && height >= 1920 {
+				wallpapers = append(wallpapers, WallpaperResponse{
+					ID:      post.ID,
+					Post:    post.Post,
+					Preview: preview,
+					URL:     post.URL,
+					Score:   post.Score,
+					Height:  height,
+					Width:   width,
+				})
+			}
+		}
+	}
+    return wallpapers
 }

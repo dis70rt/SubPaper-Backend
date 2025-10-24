@@ -1,8 +1,14 @@
 package wallpaper
 
-import "github.com/gin-gonic/gin"
+import (
+	reddit "github.com/dis70rt/subpaper-backend/internal/Reddit"
+	"github.com/gin-gonic/gin"
+	"github.com/patrickmn/go-cache"
+)
 
-func RegisterRoutes(rg *gin.RouterGroup) {
-	w := rg.Group("/wallpapers")
-	w.GET("/search", SearchWallpapers)
+
+func RegisterRoutes(router *gin.RouterGroup, client *reddit.RedditClient, cache *cache.Cache) {
+	handler := NewHandler(client, cache)
+	w := router.Group("/wallpapers")
+	w.GET("/search", handler.SearchWallpapers)
 }

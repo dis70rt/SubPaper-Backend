@@ -21,10 +21,10 @@ type RedditClient struct {
 	UserAgent string
 	Token string
 	TokenExpiry time.Time
-
 }
 type TokenResp struct {
 	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
 }
 
 func NewClient() *RedditClient {
@@ -58,7 +58,10 @@ func (client *RedditClient) getToken() error {
 
 	var tok TokenResp
 	json.NewDecoder(resp.Body).Decode(&tok)
+	
 	client.Token = tok.AccessToken
+	client.TokenExpiry = time.Now().Add(time.Duration(tok.ExpiresIn-300) * time.Second)
+
 	return nil
 }
 
