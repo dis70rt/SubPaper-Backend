@@ -34,5 +34,11 @@ type Preview struct {
 			Width  int    `json:"width"`
 			Height int    `json:"height"`
 		} `json:"source"`
+		Resolutions []struct {
+			URL    string `json:"url"`
+			Width  int    `json:"width"`
+			Height int    `json:"height"`
+		} `json:"resolutions"`
+
 	} `json:"images"`
 }
