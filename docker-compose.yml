@@ -1,0 +1,9 @@
+services:
+  subpaper:
+    build:
+      context: .
+      dockerfile: DockerFile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
