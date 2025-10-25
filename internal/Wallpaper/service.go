@@ -2,6 +2,7 @@ package wallpaper
 
 import (
 	"fmt"
+	"html"
 	"net/url"
 	"sort"
 	"strconv"
@@ -114,7 +115,7 @@ func extractPosts(resp *reddit.RedditAPIResponse) []WallpaperResponse {
 				last := images[len(images)-1]
 				width = last.Source.Width
 				height = last.Source.Height
-				preview = post.Preview.Images[0].Resolutions[2].URL
+				preview = html.UnescapeString(post.Preview.Images[0].Resolutions[2].URL)
 			}
 
 			if width >= 1080 && height >= 1920 {
